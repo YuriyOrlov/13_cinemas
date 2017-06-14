@@ -62,5 +62,8 @@ if __name__ == '__main__':
     raw_movies_page = fetch_page('https://www.afisha.ru/msk/schedule_cinema/')
     parsed_page_w_movies_list = parse_page(raw_movies_page)
     print('| Фильм | Кол-во кинотеатров | Рейтинг |')
-    for names, theaters, ratings in output_movies_to_console(parsed_page_w_movies_list):
-        print('| {} | {} | {} |'.format(names, theaters, ratings))
+    zipped = output_movies_to_console(parsed_page_w_movies_list)
+    for n, m, r in sorted(zipped, key=lambda x: x[2] if isinstance(x[2], str) else ""):
+        print(' {} {} {} '.format(n, m, r))
+    # for names, movies, ratings in sorted(zipped_movies_info, key=lambda x: x[2] if isinstance(x[2], str) else ""):
+    #     print('| {} | {} | {} |'.format(names, movies, ratings))
