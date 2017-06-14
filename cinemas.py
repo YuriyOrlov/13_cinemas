@@ -42,12 +42,8 @@ def get_number_of_movie_theaters(movie_link):
 def get_mean_rating(movie_link):
     raw_data_page = fetch_page(movie_link)
     parsed_movie_info_page = parse_page(raw_data_page)
-    try:
-        rating = parsed_movie_info_page.find('span', class_=re.compile('rating_ball')).text
-        rating = float(rating)
-    except:
-        rating = None
-    return rating
+    rating = parsed_movie_info_page.find('span', class_=re.compile('rating_ball'))
+    return float(rating.text) if rating else None
 
 
 def retrieve_kinopoisk_movie_info(movie_names):
@@ -65,7 +61,6 @@ def output_movies_to_console(parsed_page):
 if __name__ == '__main__':
     raw_movies_page = fetch_page('https://www.afisha.ru/msk/schedule_cinema/')
     parsed_page_w_movies_list = parse_page(raw_movies_page)
-    # movie_names, number_of_movie_theaters, movie_ratings = output_movies_to_console(parsed_page_w_movies_list)
+    print('| Фильм | Кол-во кинотеатров | Рейтинг |')
     for names, theaters, ratings in output_movies_to_console(parsed_page_w_movies_list):
-        print('Фильм --> Кол-во --> Рейтинг')
-        print('{} --> {} --> {}'.format(names, theaters, ratings))
+        print('| {} | {} | {} |'.format(names, theaters, ratings))
