@@ -2,6 +2,7 @@
 *.json
 *.txt
 *.old
+*.pickle
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
