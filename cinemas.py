@@ -5,19 +5,20 @@ from multiprocessing import Pool, cpu_count
 import _pickle as pickle
 from os.path import isfile
 import random
+import json
 
-PROXIES_LIST = pickle.load(open('prx.pkl', 'rb'))
-USER_AGENTS_LIST = pickle.load(open('user_agents.pkl', 'rb'))
+# PROXIES_LIST = pickle.load(open('prx.pkl', 'rb'))
+# USER_AGENTS_LIST = pickle.load(open('user_agents.pkl', 'rb'))
 
 
 def get_page(link, number_of_retries=10):
-    user_agent = random.choice(USER_AGENTS_LIST)
-    headers = {"Connection": "close", "User-Agent": user_agent}
+    user_agent = random.choice(USER_AGENTS_LIST) if USER_AGENTS_LIST else None
+    headers = {"Connection": "close", "User-Agent": user_agent} if user_agent else None
     received_data = None
     for item in range(number_of_retries):
         try:
-            proxie = random.choice(PROXIES_LIST)
-            new_proxie = {'http': '{}'.format(proxie)}
+            proxie = random.choice(PROXIES_LIST) if PROXIES_LIST else None
+            new_proxie = {'http': '{}'.format(proxie)} if proxie else None
             received_data = requests.get(link, headers=headers, proxies=new_proxie, timeout=6)
         except requests.exceptions.Timeout:
             continue
@@ -83,7 +84,14 @@ def output_movies_to_console(parsed_page):
     return zip(movie_names, number_of_movie_theaters, movie_ratings)
 
 
-def write_pickled_file(prepared_data, filename='zipped_data.pkl'):
+def load_proxies_and_user_agents(proxies_filename, user_agents_filename):
+    if (isfile(proxies_filename)) and (isfile(user_agents_filename)):
+        return load_json_file(proxies_filename), load_json_file(user_agents_filename)
+    else:
+        return None, None
+
+
+def write_pickled_file(prepared_data, filename='movies_data_zipped.pkl'):
     with open(filename, 'wb') as file:
         pickle.dump(prepared_data, file)
 
@@ -92,18 +100,43 @@ def load_pickled_data(filename):
     return pickle.load(open(filename, 'rb'))
 
 
+def write_json_file(prepared_data, filename='movies_data_zipped.json'):
+    with open(filename, 'w') as file:
+        json.dump(dict(enumerate(list(prepared_data))), file)
+
+
+def load_json_file(filename='movies_data_zipped.json'):
+    return json.load(open(filename, 'r'))
+
+
+def sort_by_rating(list_item):
+    return list_item[2] if isinstance(list_item[2], float) else 0
+
+
+def sort_by_theaters(list_item):
+    return list_item[1] if isinstance(list_item[2], float) else 0
+
+
+PROXIES_LIST, USER_AGENTS_LIST = load_json_file('good_proxie.json'), load_json_file('user_agents.json')
+
 if __name__ == '__main__':
-    if not isfile('zipped_data.pkl'):
+    # if not isfile('movies_data_zipped.pkl'):
+    if not isfile('movies_data_zipped.json'):
         raw_movies_page = get_page('https://www.afisha.ru/msk/schedule_cinema/')
         parsed_page_w_movies_list = fetch_page(raw_movies_page)
         zipped = output_movies_to_console(parsed_page_w_movies_list)
-        write_pickled_file(zipped)
-    else:
-        print('Loaded cached result.\n')
         print('| Фильм | Кол-во кинотеатров | Рейтинг |')
-        zipped = load_pickled_data('zipped_data.pkl')
-        num_entr_for_return = 10
-    for names, movies, ratings in sorted([(names, movies, ratings) for names, movies, ratings in sorted(zipped,
-                                           key=lambda x: x[2] if isinstance(x[2], float) else 0, reverse=True)],
-                                           key=lambda x: x[1] if isinstance(x[2], float) else 0, reverse=True):
+        # write_pickled_file(zipped)
+        try:
+            write_json_file(zipped)
+        except TypeError:
+            pass
+    else:
+        # zipped = load_pickled_data('movies_data_zipped.pkl')
+        zipped = load_json_file()
+        print('| Фильм | Кол-во кинотеатров | Рейтинг |')
+    num_entr_for_return = 10
+    sorted_by_rating = sorted(zipped, key=sort_by_rating)
+    sorted_by_theaters_and_rating = sorted(sorted_by_rating, key=sort_by_theaters, reverse=True)
+    for names, movies, ratings in sorted_by_theaters_and_rating[:num_entr_for_return]:
         print('| {} | {} | {} |'.format(names, movies, ratings))
