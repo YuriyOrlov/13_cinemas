@@ -1,23 +1,23 @@
+from args_parser import ConsoleArgsParser
+from proxie_test import ProxieList
 import requests
 from bs4 import BeautifulSoup
 import re
 from multiprocessing import Pool, cpu_count
 import _pickle as pickle
 from os.path import isfile
+import datetime
 import random
-import json
-
-# PROXIES_LIST = pickle.load(open('prx.pkl', 'rb'))
-# USER_AGENTS_LIST = pickle.load(open('user_agents.pkl', 'rb'))
+from functools import partial
 
 
-def get_page(link, number_of_retries=10):
-    user_agent = random.choice(USER_AGENTS_LIST) if USER_AGENTS_LIST else None
+def get_page(link, proxies_list=None, user_agent_list=None, number_of_retries=10):
+    user_agent = random.choice(user_agent_list) if user_agent_list else None
     headers = {"Connection": "close", "User-Agent": user_agent} if user_agent else None
     received_data = None
     for item in range(number_of_retries):
         try:
-            proxie = random.choice(PROXIES_LIST) if PROXIES_LIST else None
+            proxie = random.choice(proxies_list) if proxies_list else None
             new_proxie = {'http': '{}'.format(proxie)} if proxie else None
             received_data = requests.get(link, headers=headers, proxies=new_proxie, timeout=6)
         except requests.exceptions.Timeout:
@@ -33,13 +33,18 @@ def fetch_page(raw_html):
     return BeautifulSoup(raw_html.content, 'lxml')
 
 
-def parallel_page_parsing(func, movie_links):
+def parallel_page_parsing(func, movie_links, proxies_list, user_agents_list):
     num_of_parallel_processes = cpu_count() * 2
     pool = Pool(num_of_parallel_processes)
-    return pool.map(func, movie_links)
+    return pool.map(partial(func, proxies_list=proxies_list, user_agents_list=user_agents_list), movie_links)
 
 
-def fetch_afisha_movie_info(raw_info):
+def starmap_for_pool(function, iterable):
+    for args in iterable:
+        yield function(*args)
+
+
+def fetch_afisha_movie_info(raw_info, proxies_list, user_agents_list):
     parsed_data = raw_info.find_all('h3', class_=re.compile('usetags'))
     movie_names = [movie_name.text for movie_name in parsed_data]
     movie_links = [movie_link.a.get('href') for movie_link in parsed_data]
@@ -47,18 +52,21 @@ def fetch_afisha_movie_info(raw_info):
     movies_id_list = [movie_id_number.search(link).group(0) for link in movie_links]
     afisha_movie_url = 'https://www.afisha.ru/msk/schedule_cinema_product/'
     movie_links = ['{}{}'.format(afisha_movie_url, movie_id) for movie_id in movies_id_list]
-    number_of_movie_theaters = parallel_page_parsing(get_number_of_movie_theaters, movie_links)
+    number_of_movie_theaters = parallel_page_parsing(get_number_of_movie_theaters,
+                                                     movie_links,
+                                                     proxies_list,
+                                                     user_agents_list)
     return movie_names, number_of_movie_theaters
 
 
-def get_number_of_movie_theaters(movie_link):
-    raw_movie_page = get_page(movie_link)
+def get_number_of_movie_theaters(movie_link, proxies_list, user_agents_list):
+    raw_movie_page = get_page(movie_link, proxies_list, user_agents_list)
     ready_movie_page = fetch_page(raw_movie_page) if raw_movie_page else None
     return len(ready_movie_page.find_all('td', class_=re.compile('b-td-item')))
 
 
-def get_mean_rating(movie_link):
-    raw_movie_page = get_page(movie_link)
+def get_mean_rating(movie_link, proxies_list, user_agents_list):
+    raw_movie_page = get_page(movie_link, proxies_list, user_agents_list)
     ready_movie_page = fetch_page(raw_movie_page) if raw_movie_page else None
     rating = ready_movie_page.find('span', class_=re.compile('rating_ball')) if ready_movie_page else None
     if rating is None:
@@ -72,23 +80,80 @@ def get_mean_rating(movie_link):
         return float(rating.text) if rating else None
 
 
-def retrieve_kinopoisk_movie_info(movie_names):
+def retrieve_kinopoisk_movie_info(movie_names, proxies_list, user_agents_list):
     kinopoisk_movie_url = 'https://www.kinopoisk.ru/index.php?first=yes&what=&kp_query='
     movie_links = ['{}{}'.format(kinopoisk_movie_url, movie_name) for movie_name in movie_names]
-    return parallel_page_parsing(get_mean_rating, movie_links)
+    return parallel_page_parsing(get_mean_rating, movie_links, proxies_list, user_agents_list)
 
 
-def output_movies_to_console(parsed_page):
-    movie_names, number_of_movie_theaters = fetch_afisha_movie_info(parsed_page)
-    movie_ratings = retrieve_kinopoisk_movie_info(movie_names)
+def output_movies_to_console(parsed_page, proxies_list, user_agents_list):
+    movie_names, number_of_movie_theaters = fetch_afisha_movie_info(parsed_page, proxies_list, user_agents_list)
+    movie_ratings = retrieve_kinopoisk_movie_info(movie_names, proxies_list, user_agents_list)
     return zip(movie_names, number_of_movie_theaters, movie_ratings)
 
 
-def load_proxies_and_user_agents(proxies_filename, user_agents_filename):
-    if (isfile(proxies_filename)) and (isfile(user_agents_filename)):
-        return load_json_file(proxies_filename), load_json_file(user_agents_filename)
+def determine_action_and_make_output_to_console(datetime_date, *args):
+    header = '| Фильм | Кол-во кинотеатров | Рейтинг |'
+    if (not isfile('movies_data_zipped.pkl')) and (compare_dates(datetime_date)):
+        write_pickled_file(datetime.date.today(), 'last_updated.pkl')
+        proxies_list = define_where_to_take_anon_proxies_list(args.get_anonymous_proxies, args.renew_common_proxies)
+        user_agents_list = create_user_agents_list(args.get_user_agents)
+        raw_movies_page = get_page('https://www.afisha.ru/msk/schedule_cinema/', proxies_list, user_agents_list)
+        parsed_page_w_movies_list = fetch_page(raw_movies_page)
+        zipped = output_movies_to_console(parsed_page_w_movies_list, proxies_list, user_agents_list)
+        write_pickled_file(zipped)
+        return zipped, header
     else:
-        return None, None
+        zipped = load_pickled_data('movies_data_zipped.pkl')
+        return zipped, header
+
+
+def compare_dates(date):
+    return False if (date - datetime.date.today()).days < -2 else True
+
+
+def chek_update_date():
+    if isfile('last_updated.pkl'):
+        return load_pickled_data('last_updated.pkl')
+    else:
+        write_pickled_file(datetime.date.today(), 'last_updated.pkl')
+        return True
+
+
+def define_where_to_take_anon_proxies_list(*args):
+    if (isfile('anon_prx.pkl')) and (not args.get_anonymous_proxies) and (not args.renew_anonymous_proxies):
+        return load_pickled_data('anon_prx.pkl')
+    else:
+        return create_anonymous_proxie_list()
+
+
+def define_where_to_take_common_proxies_list(*args):
+    if (isfile('untested_prx.pkl')) and (not args.get_common_proxies) and (not args.renew_common_proxies):
+        return load_pickled_data('untested_prx.pkl')
+    else:
+        return create_common_proxie_list()
+
+
+def what_kind_of_proxies_to_use(*args):
+    if args.get_anonymous_proxies:
+        define_where_to_take_anon_proxies_list(args.get_anonymous_proxies, args.renew_common_proxies)
+    elif args.get_common_proxies:
+        define_where_to_take_common_proxies_list(args.get_anonymous_proxies, args.renew_common_proxies)
+    else:
+        return None
+
+
+# def define_where_to_take_user_agents_list(*args):
+#     if isfile('user_agents.pkl') and not args.get_user_agents:
+#         return load_pickled_data('user_agents.pkl')
+#     else:
+#         return create_common_proxie_list()
+
+
+def create_user_agents_list(*args):
+    user_agents = ProxieList()
+    user_agents.load_user_agents_from_any_source()
+    return user_agents.user_agents if args.get_user_agents else None
 
 
 def write_pickled_file(prepared_data, filename='movies_data_zipped.pkl'):
@@ -97,16 +162,7 @@ def write_pickled_file(prepared_data, filename='movies_data_zipped.pkl'):
 
 
 def load_pickled_data(filename):
-    return pickle.load(open(filename, 'rb'))
-
-
-def write_json_file(prepared_data, filename='movies_data_zipped.json'):
-    with open(filename, 'w') as file:
-        json.dump(dict(enumerate(list(prepared_data))), file)
-
-
-def load_json_file(filename='movies_data_zipped.json'):
-    return json.load(open(filename, 'r'))
+    return pickle.load(open(filename, 'rb')) if isfile(filename) else None
 
 
 def sort_by_rating(list_item):
@@ -117,26 +173,43 @@ def sort_by_theaters(list_item):
     return list_item[1] if isinstance(list_item[2], float) else 0
 
 
-PROXIES_LIST, USER_AGENTS_LIST = load_json_file('good_proxie.json'), load_json_file('user_agents.json')
+def create_common_proxie_list():
+    proxies = ProxieList()
+    proxies.get_proxie_list()
+    proxies.save_untested_proxies()
+    return proxies.proxie_list
+
+
+def create_anonymous_proxie_list():
+    proxies = ProxieList()
+    proxies.get_proxie_list()
+    proxies.parallel_proxie_test()
+    proxies.save_good_proxies()
+    return proxies.proxie_list
+
 
 if __name__ == '__main__':
-    # if not isfile('movies_data_zipped.pkl'):
-    if not isfile('movies_data_zipped.json'):
-        raw_movies_page = get_page('https://www.afisha.ru/msk/schedule_cinema/')
-        parsed_page_w_movies_list = fetch_page(raw_movies_page)
-        zipped = output_movies_to_console(parsed_page_w_movies_list)
-        print('| Фильм | Кол-во кинотеатров | Рейтинг |')
-        # write_pickled_file(zipped)
-        try:
-            write_json_file(zipped)
-        except TypeError:
-            pass
-    else:
-        # zipped = load_pickled_data('movies_data_zipped.pkl')
-        zipped = load_json_file()
-        print('| Фильм | Кол-во кинотеатров | Рейтинг |')
-    num_entr_for_return = 10
-    sorted_by_rating = sorted(zipped, key=sort_by_rating)
+    parser = ConsoleArgsParser()
+    args = parser.parse_args()
+    # print(args)
+    # print(args.get_anonymous_proxies is None)
+    # print(args.get_common_proxies is None)
+    # print(args.get_user_agents is None)
+    # print(args.renew_common_proxies is None)
+    # print(args.renew_anonymous_proxies is None)
+    # print(args.ret == 0)
+
+    last_update = chek_update_date()
+    zipped_cinema_data, console_output_header = determine_action_and_make_output_to_console(last_update,
+                                                                                            args.get_common_proxies,
+                                                                                            args.get_anonymous_proxies,
+                                                                                            args.get_user_agents,
+                                                                                            args.renew_common_proxies,
+                                                                                            args.renew_anonymous_proxies
+                                                                                            )
+    num__of_entr_to_return = args.ret
+    sorted_by_rating = sorted(zipped_cinema_data, key=sort_by_rating)
     sorted_by_theaters_and_rating = sorted(sorted_by_rating, key=sort_by_theaters, reverse=True)
-    for names, movies, ratings in sorted_by_theaters_and_rating[:num_entr_for_return]:
+    print(console_output_header)
+    for names, movies, ratings in sorted_by_theaters_and_rating[:num__of_entr_to_return]:
         print('| {} | {} | {} |'.format(names, movies, ratings))
