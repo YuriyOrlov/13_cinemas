@@ -83,6 +83,8 @@ class ProxieList(IpAndProxieLinks):
             self.load_user_agents_from_web()
         elif (self.user_agents is None) and (isfile('user_agents.json')):
             self.load_user_agents_from_JSON_file(self, 'user_agents.json')
+        elif (self.user_agents is None) and (isfile('user_agents.pkl')):
+            self.load_user_agents_from_JSON_file(self, 'user_agents.pkl')
         else:
             return None
 
@@ -159,14 +161,14 @@ class ProxieList(IpAndProxieLinks):
 
     def save_good_proxies(self):
         if self.anonymous_proxies:
-            with open('good_prx.pkl', 'wb') as file:
+            with open('anon_prx.pkl', 'wb') as file:
                 pickle.dump(self.anonymous_proxies, file)
         else:
             return None
 
     def load_good_proxies(self):
-        if isfile('good_prx.pkl'):
-            with open('good_prx.pkl', 'rb') as file:
+        if isfile('anon_prx.pkl'):
+            with open('anon_prx.pkl', 'rb') as file:
                 return pickle.load(file)
         else:
             return None
