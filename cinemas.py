@@ -39,11 +39,6 @@ def parallel_page_parsing(func, movie_links, proxies_list, user_agents_list):
     return pool.map(partial(func, proxies_list=proxies_list, user_agents_list=user_agents_list), movie_links)
 
 
-def starmap_for_pool(function, iterable):
-    for args in iterable:
-        yield function(*args)
-
-
 def fetch_afisha_movie_info(raw_info, proxies_list, user_agents_list):
     parsed_data = raw_info.find_all('h3', class_=re.compile('usetags'))
     movie_names = [movie_name.text for movie_name in parsed_data]
@@ -92,12 +87,13 @@ def output_movies_to_console(parsed_page, proxies_list, user_agents_list):
     return zip(movie_names, number_of_movie_theaters, movie_ratings)
 
 
-def determine_action_and_make_output_to_console(datetime_date, *args):
+def determine_action_and_make_output_to_console(*args, **kwargs):
     header = '| Фильм | Кол-во кинотеатров | Рейтинг |'
-    if (not isfile('movies_data_zipped.pkl')) and (compare_dates(datetime_date)):
+    if (not isfile('movies_data_zipped.pkl')) and (chek_update_date()):
         write_pickled_file(datetime.date.today(), 'last_updated.pkl')
-        proxies_list = define_where_to_take_anon_proxies_list(args.get_anonymous_proxies, args.renew_common_proxies)
-        user_agents_list = create_user_agents_list(args.get_user_agents)
+        proxies_list = what_kind_of_proxies_to_use(get_anonymous_proxies=kwargs.get('get_anonymous_proxies'),
+                                                   get_common_proxies=kwargs.get('get_common_proxies'))
+        user_agents_list = define_where_to_take_user_agents_list(get_user_agents=kwargs.get('get_user_agents'))
         raw_movies_page = get_page('https://www.afisha.ru/msk/schedule_cinema/', proxies_list, user_agents_list)
         parsed_page_w_movies_list = fetch_page(raw_movies_page)
         zipped = output_movies_to_console(parsed_page_w_movies_list, proxies_list, user_agents_list)
@@ -114,46 +110,43 @@ def compare_dates(date):
 
 def chek_update_date():
     if isfile('last_updated.pkl'):
-        return load_pickled_data('last_updated.pkl')
+        return compare_dates(load_pickled_data('last_updated.pkl'))
     else:
         write_pickled_file(datetime.date.today(), 'last_updated.pkl')
         return True
 
 
-def define_where_to_take_anon_proxies_list(*args):
-    if (isfile('anon_prx.pkl')) and (not args.get_anonymous_proxies) and (not args.renew_anonymous_proxies):
+def define_where_to_take_anon_proxies_list(**kwargs):
+    if isfile('anon_prx.pkl') and kwargs.get('get_anonymous_proxies'):
         return load_pickled_data('anon_prx.pkl')
     else:
         return create_anonymous_proxie_list()
 
 
-def define_where_to_take_common_proxies_list(*args):
-    if (isfile('untested_prx.pkl')) and (not args.get_common_proxies) and (not args.renew_common_proxies):
+def define_where_to_take_common_proxies_list(**kwargs):
+    if isfile('untested_prx.pkl') and kwargs.get('get_common_proxies'):
         return load_pickled_data('untested_prx.pkl')
     else:
         return create_common_proxie_list()
 
 
-def what_kind_of_proxies_to_use(*args):
-    if args.get_anonymous_proxies:
-        define_where_to_take_anon_proxies_list(args.get_anonymous_proxies, args.renew_common_proxies)
-    elif args.get_common_proxies:
-        define_where_to_take_common_proxies_list(args.get_anonymous_proxies, args.renew_common_proxies)
-    else:
+def what_kind_of_proxies_to_use(**kwargs):
+    if kwargs.get('get_anonymous_proxies') and not kwargs.get('get_common_proxies'):
+        return define_where_to_take_anon_proxies_list(get_anonymous_proxies=kwargs.get('get_anonymous_proxies'))
+    elif kwargs.get('get_common_proxies') and not kwargs.get('get_anonymous_proxies'):
+        return define_where_to_take_common_proxies_list(get_common_proxies=kwargs.get('get_common_proxies'))
+    elif not kwargs.get('get_common_proxies') and not kwargs.get('get_anonymous_proxies'):
         return None
+    else:
+        raise ValueError('Too many keys for proxies. Choose the kind of proxies to use.')
 
 
-# def define_where_to_take_user_agents_list(*args):
-#     if isfile('user_agents.pkl') and not args.get_user_agents:
-#         return load_pickled_data('user_agents.pkl')
-#     else:
-#         return create_common_proxie_list()
-
-
-def create_user_agents_list(*args):
-    user_agents = ProxieList()
-    user_agents.load_user_agents_from_any_source()
-    return user_agents.user_agents if args.get_user_agents else None
+def define_where_to_take_user_agents_list(**kwargs):
+    if isfile('user_agents.pkl') and (not kwargs.get('get_user_agents')):
+        return load_pickled_data('user_agents.pkl')
+    else:
+        user_agents_list = create_user_agents_list()
+        return user_agents_list
 
 
 def write_pickled_file(prepared_data, filename='movies_data_zipped.pkl'):
@@ -171,6 +164,24 @@ def sort_by_rating(list_item):
 
 def sort_by_theaters(list_item):
     return list_item[1] if isinstance(list_item[2], float) else 0
+
+
+class Movie(object):
+
+    def __init__(self, name=None, cinemas=None, rating=None):
+        self.name = name
+        self.cinemas = cinemas
+        self.rating = rating
+
+    def __repr__(self):
+        return repr((self.name, self.cinemas, self.rating))
+
+
+def create_user_agents_list():
+    user_agents = ProxieList()
+    user_agents.load_user_agents_from_any_source()
+    user_agents.save_user_agents()
+    return user_agents.user_agents
 
 
 def create_common_proxie_list():
@@ -191,25 +202,19 @@ def create_anonymous_proxie_list():
 if __name__ == '__main__':
     parser = ConsoleArgsParser()
     args = parser.parse_args()
-    # print(args)
-    # print(args.get_anonymous_proxies is None)
-    # print(args.get_common_proxies is None)
-    # print(args.get_user_agents is None)
-    # print(args.renew_common_proxies is None)
-    # print(args.renew_anonymous_proxies is None)
-    # print(args.ret == 0)
-
     last_update = chek_update_date()
     zipped_cinema_data, console_output_header = determine_action_and_make_output_to_console(last_update,
-                                                                                            args.get_common_proxies,
-                                                                                            args.get_anonymous_proxies,
-                                                                                            args.get_user_agents,
-                                                                                            args.renew_common_proxies,
-                                                                                            args.renew_anonymous_proxies
-                                                                                            )
+                                                                get_common_proxies=args.get_common_proxies,
+                                                                get_anonymous_proxies=args.get_anonymous_proxies,
+                                                                get_user_agents=args.get_user_agents)
     num__of_entr_to_return = args.ret
     sorted_by_rating = sorted(zipped_cinema_data, key=sort_by_rating)
     sorted_by_theaters_and_rating = sorted(sorted_by_rating, key=sort_by_theaters, reverse=True)
-    print(console_output_header)
-    for names, movies, ratings in sorted_by_theaters_and_rating[:num__of_entr_to_return]:
-        print('| {} | {} | {} |'.format(names, movies, ratings))
+    if num__of_entr_to_return > 0:
+        print(console_output_header)
+        for names, movies, ratings in sorted_by_theaters_and_rating[:num__of_entr_to_return]:
+            print('| {} | {} | {} |'.format(names, movies, ratings))
+    else:
+        print(console_output_header)
+        for names, movies, ratings in sorted_by_theaters_and_rating:
+            print('| {} | {} | {} |'.format(names, movies, ratings))
