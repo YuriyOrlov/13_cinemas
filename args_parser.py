@@ -20,37 +20,25 @@ class ConsoleArgsParser(argparse.ArgumentParser):
                       ''')
         self.add_argument('-get_common_proxies',
                           help='Receive a bunch of proxies and,\
-                              save them to a file \
-                              File "untested_prx.pkl" \
+                              save them to a file. \
+                              The file "untested_prx.pkl" \
                               will be created \
                               EXAMPLE: -get_common_proxies yes\
                               (default: %(default)s)',
                           type=str, default=None)
         self.add_argument('-get_anonymous_proxies',
                           help='Receive a bunch of anonymous L3 proxies, then test`em\
-                              and save them to a file \
-                              File "anon_prx.pkl" will be created \
+                              and save them to a file. \
+                              The file "anon_prx.pkl" will be created. \
                               ATTENTION: Could take MUCH TIME (40 - 60 minutes)!\
                               EXAMPLE: -get_anonymous_proxies yes\
                               (default: %(default)s)',
                           type=str, default=None)
         self.add_argument('-get_user_agents',
-                          help='Receive a bunch of user agent records\
-                              File "user_agents.pkl" will be created \
+                          help='Receive a bunch of user agent records.\
+                              File "user_agents.pkl" will be created. \
                               EXAMPLE: -get_user_agents yes\
-                              (default: %(default)s)',
-                          type=str, default=None)
-        self.add_argument('-renew_common_proxies',
-                          help='Proxies will be renewed \
-                              File "untested_prx.pkl" will be rewritten. \
-                              (default: %(default)s)',
-                          type=str, default=None)
-        self.add_argument('-renew_anonymous_proxies',
-                          help='Anonymous proxies will be renewed \
-                              File "anon_prx.pkl" will be rewritten. \
-                              ATTENTION: Could take MUCH TIME (40 - 60 minutes)!\
-                              (default: %(default)s)',
-                          type=str, default=None)
+                              (default: %(default)s)')
         self.add_argument('-ret',
                           help='How many records to return\
                               e.g. -ret 5. If you will enter 0\
