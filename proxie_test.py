@@ -8,29 +8,6 @@ from os.path import isfile
 import json
 
 
-'''
-This class was designed for proxie search ant testing.
-
-EXAMPLE:
-from proxie_test import ProxieList
-proxies = ProxieList()
-proxies.get_proxie_list()
-proxies.parallel_proxie_test()
-
-FOR SAVING TESTED PROXIES():
-    proxies.save_good_proxies()
-
-FOR SAVING UNTESTED PROXIES():
-    proxies.save_untested_proxies()
-
-IF YOU HAVE USER AGENTS IN TXT:
-    proxies.load_user_agents('user_agents.txt')
-
-The test takes about 40 - 60 minutes, so be patient.
-
-'''
-
-
 class IpAndProxieLinks(object):
 
     def __init__(self, detect_ip_link='http://icanhazip.com',
