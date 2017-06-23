@@ -84,7 +84,7 @@ class ProxieList(IpAndProxieLinks):
         elif (self.user_agents is None) and (isfile('user_agents.json')):
             self.load_user_agents_from_JSON_file(self, 'user_agents.json')
         elif (self.user_agents is None) and (isfile('user_agents.pkl')):
-            self.load_user_agents_from_JSON_file(self, 'user_agents.pkl')
+            self.load_user_agents_from_PKL_file(self, 'user_agents.pkl')
         else:
             return None
 
@@ -100,10 +100,7 @@ class ProxieList(IpAndProxieLinks):
             return None
 
     def load_user_agents_from_JSON_file(self, user_agents_file):
-        if user_agents_file:
-            self.user_agents = json.load(open(user_agents_file, 'r'))
-        else:
-            return None
+        self.user_agents = json.load(open(user_agents_file, 'r'))
 
     def load_user_agents_from_TXT_file(self, user_agents_file):
         if user_agents_file:
@@ -116,6 +113,9 @@ class ProxieList(IpAndProxieLinks):
             self.user_agents = user_agents_list
         else:
             return None
+
+    def load_user_agents_from_PKL_file(self, user_agents_file):
+        return pickle.load(open(user_agents_file, 'rb'))
 
     def test_ip(self, proxie, number_of_retries=10, default_timeout=5):
         user_agent = random.choice(self.user_agents) if self.user_agents else None
@@ -162,6 +162,13 @@ class ProxieList(IpAndProxieLinks):
     def save_good_proxies(self):
         if self.anonymous_proxies:
             with open('anon_prx.pkl', 'wb') as file:
+                pickle.dump(self.anonymous_proxies, file)
+        else:
+            return None
+
+    def save_user_agents(self):
+        if self.user_agents:
+            with open('user_agents.pkl', 'wb') as file:
                 pickle.dump(self.anonymous_proxies, file)
         else:
             return None
