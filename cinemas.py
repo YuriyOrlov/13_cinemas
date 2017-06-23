@@ -166,17 +166,6 @@ def sort_by_theaters(list_item):
     return list_item[1] if isinstance(list_item[2], float) else 0
 
 
-class Movie(object):
-
-    def __init__(self, name=None, cinemas=None, rating=None):
-        self.name = name
-        self.cinemas = cinemas
-        self.rating = rating
-
-    def __repr__(self):
-        return repr((self.name, self.cinemas, self.rating))
-
-
 def create_user_agents_list():
     user_agents = ProxieList()
     user_agents.load_user_agents_from_any_source()
