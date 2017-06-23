@@ -55,6 +55,37 @@ class ProxieList(IpAndProxieLinks):
         else:
             return None
 
+    def parallel_proxie_test(self):
+        if self.proxie_list:
+            self.get_own_ip()
+            num_of_parallel_processes = cpu_count() * 2
+            pool = Pool(num_of_parallel_processes)
+            anonymous_proxies = pool.map(self.test_ip, self.proxie_list)
+            self.anonymous_proxies = [proxie for proxie in anonymous_proxies if proxie is not None]
+        else:
+            return None
+
+    def test_ip(self, proxie, number_of_retries=10, default_timeout=5):
+        user_agent = random.choice(self.user_agents) if self.user_agents else None
+        headers = {"Connection": "close", "User-Agent": user_agent} if user_agent else None
+        received_data = self.test_link(headers, proxie, default_timeout, number_of_retries)
+        return self.determine_is_proxie_good(received_data, proxie) if received_data else None
+
+    def test_link(self, headers, proxie, default_timeout, number_of_retries):
+        received_data = None
+        for item in range(number_of_retries):
+            try:
+                new_proxie = {'http': '{}'.format(proxie)}
+                received_data = requests.get(self.detect_ip_link,
+                                             headers=headers,
+                                             proxies=new_proxie,
+                                             timeout=default_timeout)
+            except requests.exceptions.Timeout:
+                return None
+            except requests.exceptions.RequestException:
+                return None
+            return received_data if received_data else None
+
     def load_user_agents_from_any_source(self):
         if (self.user_agents is None) and (not isfile('user_agents.json')):
             self.load_user_agents_from_web()
@@ -94,38 +125,10 @@ class ProxieList(IpAndProxieLinks):
     def load_user_agents_from_PKL_file(self, user_agents_file):
         return pickle.load(open(user_agents_file, 'rb'))
 
-    def test_ip(self, proxie, number_of_retries=10, default_timeout=5):
-        user_agent = random.choice(self.user_agents) if self.user_agents else None
-        headers = {"Connection": "close", "User-Agent": user_agent} if user_agent else None
-        received_data = None
-        for item in range(number_of_retries):
-            try:
-                new_proxie = {'http': '{}'.format(proxie)}
-                received_data = requests.get(self.detect_ip_link,
-                                             headers=headers,
-                                             proxies=new_proxie,
-                                             timeout=default_timeout)
-            except requests.exceptions.Timeout:
-                received_data = None
-                break
-            except requests.exceptions.RequestException:
-                received_data = None
-                break
-            if received_data:
-                break
-        if received_data:
-            visible_ip = received_data.text.strip()
-            if (visible_ip != self.original_ip_adress) and (visible_ip != 'HTTP/1.1 400 Bad Request'):
-                return proxie
-        else:
-            return None
-
-    def parallel_proxie_test(self):
-        if self.proxie_list:
-            num_of_parallel_processes = cpu_count() * 2
-            pool = Pool(num_of_parallel_processes)
-            anonymous_proxies = pool.map(self.test_ip, self.proxie_list)
-            self.anonymous_proxies = [proxie for proxie in anonymous_proxies if proxie is not None]
+    def determine_is_proxie_good(self, data, proxie):
+        visible_ip = data.text.strip()
+        if (visible_ip != self.original_ip_adress) and (visible_ip != 'HTTP/1.1 400 Bad Request'):
+            return proxie
         else:
             return None
 
@@ -163,4 +166,5 @@ if __name__ == '__main__':
     proxies.get_proxie_list()
     proxies.load_user_agents_from_any_source()
     proxies.parallel_proxie_test()
+    proxies.save_user_agents()
     proxies.save_good_proxies()
