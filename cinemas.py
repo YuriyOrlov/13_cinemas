@@ -205,5 +205,5 @@ if __name__ == '__main__':
             print('| {} | {} | {} |'.format(names, movies, ratings))
     else:
         print(console_output_header)
-        for names, movies, ratings in sorted(sorted_by_theaters_and_rating, key=sort_by_rating):
+        for names, movies, ratings in sorted_by_theaters_and_rating:
             print('| {} | {} | {} |'.format(names, movies, ratings))
